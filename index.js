@@ -12,7 +12,7 @@ const queue = "Hello";
 // Publisher
 const publisher = async (fileName) => {
   try {
-    const conn = await amqp.connect('amqp://localhost');
+    const conn = await amqp.connect('amqp://rabbit:password@localhost');
     const ch = await conn.createChannel();
 
     ch.assertQueue(queue, {
@@ -33,7 +33,7 @@ const publisher = async (fileName) => {
 // Consumer
 const consumer = async () => {
   try {
-    const conn = await amqp.connect('amqp://localhost');
+    const conn = await amqp.connect('amqp://rabbit:password@localhost');
     const ch = await conn.createChannel();
 
     ch.assertQueue(queue, {
