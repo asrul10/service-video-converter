@@ -4,36 +4,18 @@
 const amqp = require('amqplib')
 const ffmpeg = require('fluent-ffmpeg')
 const cliProgress = require('cli-progress')
-const minio = require('minio')
 
-const bar1 = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic)
 const args = process.argv.slice(2)
-const queue = "Hello"
-
-const downloader = async () => {
-  const minioClient = new minio.Client({
-    endPoint: 'localhost',
-    port: 9000,
-    useSSL: false,
-    accessKey: 'minio',
-    secretKey: 'miniosecret'
-  })
-
-  // Test upload
-  const file = 'source/1mb.mp4'
-  var metaData = {
-    'example': 5678
-  }
-  minioClient.fPutObject('video-source', '1mb.mp4', file, metaData, function (err, etag) {
-    if (err) return console.log(err)
-    console.log('File uploaded successfully.')
-  })
-}
+const amqpHost = 'amqp://localhost'
+const queue = "video-converter"
+const bucketSource = '/data/video-source/'
+const bucketTarget = '/data/video-prod/'
+const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic)
 
 // Publisher
 const publisher = async (fileName) => {
   try {
-    const conn = await amqp.connect('amqp://rabbit:password@localhost')
+    const conn = await amqp.connect(amqpHost)
     const ch = await conn.createChannel()
 
     ch.assertQueue(queue, {
@@ -54,7 +36,7 @@ const publisher = async (fileName) => {
 // Consumer
 const consumer = async () => {
   try {
-    const conn = await amqp.connect('amqp://rabbit:password@localhost')
+    const conn = await amqp.connect(amqpHost)
     const ch = await conn.createChannel()
 
     ch.assertQueue(queue, {
@@ -80,31 +62,31 @@ const consumer = async () => {
 }
 
 const convert = (fileName) => {
-  bar1.start(100, 0)
+  progressBar.start(100, 0)
 
   return new Promise(function (resolve, reject) {
-    ffmpeg('source/' + fileName)
-      .output('dist/' + fileName + '-480p.mp4')
+    ffmpeg(bucketSource + fileName)
+      .output(bucketTarget + fileName + '-480p.mp4')
       .audioCodec('copy')
       .size('720x480')
 
-      .output('dist/' + fileName + '-720p.mp4')
+      .output(bucketTarget + fileName + '-720p.mp4')
       .audioCodec('copy')
       .size('1280x720')
 
-      .output('dist/' + fileName + '-1080p.mp4')
+      .output(bucketTarget + fileName + '-1080p.mp4')
       .audioCodec('copy')
       .size('1920x1080')
 
       .on('progress', function (progress) {
-        bar1.update(Math.round(progress.percent))
+        progressBar.update(Math.round(progress.percent))
       })
       .on('error', function (err) {
         reject(err)
       })
       .on('end', function () {
-        bar1.stop()
-        resolve("Success converted!")
+        progressBar.stop()
+        resolve(`${fileName} Success converted!`)
       })
       .run()
   })
@@ -120,10 +102,6 @@ if (args[0] === "publisher") {
 }
 if (args[0] === "consumer") {
   consumer()
-  return
-}
-if (args[0] === "downloader") {
-  downloader()
   return
 }
 
